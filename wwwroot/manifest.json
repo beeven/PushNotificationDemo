@@ -1,0 +1,13 @@
+{
+    "short_name": "ASP.NET MVC PWA",
+    "name": "My First ASP.NET MVC PWA",
+    "icons": [
+      {
+        "src": "favicon.ico"
+      }
+    ],
+    "start_url": "/Home",
+    "background_color": "#222",
+    "theme_color": "#222",
+    "display": "standalone"
+  }

@@ -1,0 +1,30 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Welcome</h1>
+    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+</div>
+
+<div class="text-center">
+    <button onclick="notifyMe()">Notify me!</button>
+</div>
+
+<div class="text-center">
+    <p>
+    <span>Service worker kind:</span><span id="kind"></span>
+    </p>
+    <p>
+        <span>state: </span><span id="state"></span>
+    </p>
+</div>
+<div class="text-center">
+    <button disabled=true id="subscriptionButton">service worker</button>
+</div>
+<div class="text-center">
+    <button onclick="postMessage()">Post Message</button>
+</div>
+<div class="text-center">
+    <span id="message"></span>
+</div>
