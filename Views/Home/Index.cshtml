@@ -19,8 +19,12 @@
         <span>state: </span><span id="state"></span>
     </p>
 </div>
-<div class="text-center">
-    <button disabled=true id="subscriptionButton">service worker</button>
+<div class="d-flex flex-row justify-content-center p-2">
+    <div class="mx-2">
+        <label for="clientId">ClientID:</label>
+        <input id="clientId" type="text" placeholder="ClientId" value="beeven"/>
+    </div>
+    <button class="mx-2" type="submit" disabled=true id="subscriptionButton">Subscribe</button>
 </div>
 <div class="text-center">
     <button onclick="postMessage()">Post Message</button>

@@ -83,12 +83,14 @@ function subscribe() {
         console.log("Subscribed", subscription.endpoint);
         console.log(subscription);
         console.log(subscription.toJSON());
+        let clientId = document.querySelector("#clientId").value ?? "beeven";
         return fetch('/Subscription/Register',{
             method: 'post',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
+                clientId: clientId,
                 subscription: subscription
             })
         });
@@ -103,12 +105,16 @@ function unsubscribe() {
         return subscription.unsubscribe()
             .then(()=>{
                 console.log("Unsubscribed", subscription.endpoint);
+                let clientId = document.querySelector("#clientId").value ?? "beeven";
                 return fetch("/Subscription/Unregister",{
                     method: 'post',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ subscription })
+                    body: JSON.stringify({ 
+                        clientId: clientId,
+                        subscription: subscription 
+                    })
                 });
             });
     }).then(setSubscribeButton);

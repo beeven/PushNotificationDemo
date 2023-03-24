@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Security.Cryptography;
 using testpushnotification.Services;
 using testpushnotification.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace testpushnotification.Controllers;
 
@@ -25,20 +26,44 @@ public class SubscriptionController : ControllerBase
 
     [HttpPost]
     [Consumes("application/json")]
-    public ActionResult Register([FromBody]PushSubscriptionInfo subscription)
+    public async Task<ActionResult> Register([FromBody]PushSubscriptionInfo info)
     {
+        var subscription = await subsContext.Subscriptions.FindAsync(info.ClientId);
+        if(subscription is null)
+        {
+            await subsContext.Subscriptions.AddAsync(new ClientSubscription{
+                ClientId = info.ClientId,
+                Endpoint = info.Subscription.Endpoint,
+                Expires = info.Subscription.ExpirationTime,
+                P256DH = info.Subscription.Keys.P256DH,
+                Auth = info.Subscription.Keys.Auth,
+                DateCreated = DateTimeOffset.Now,
+                DateModified = DateTimeOffset.Now
+            });
+        }
+        else
+        {
+            subscription.Endpoint = info.Subscription.Endpoint;
+            subscription.Expires = info.Subscription.ExpirationTime;
+            subscription.P256DH = info.Subscription.Keys.P256DH;
+            subscription.Auth = info.Subscription.Keys.Auth;
+            subscription.DateModified = DateTimeOffset.Now;
+        }
+        await subsContext.SaveChangesAsync();
         
-        
-        System.Console.WriteLine(json.ToJsonString(new() { WriteIndented = true }));
+
+
+        System.Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(subscription, new System.Text.Json.JsonSerializerOptions{WriteIndented = true}));
         return Ok();
     }
 
 
     [HttpPost]
     [Consumes("application/json")]
-    public ActionResult Unregister([FromBody] JsonNode json)
+    public async Task<ActionResult> Unregister([FromBody] PushSubscriptionInfo info)
     {
-        System.Console.WriteLine(json.ToJsonString(new() { WriteIndented = true }));
+        await subsContext.Subscriptions.Where(x => x.ClientId == info.ClientId).ExecuteDeleteAsync();
+        System.Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(info, new System.Text.Json.JsonSerializerOptions{WriteIndented = true}));
         return Ok();
     }
 
