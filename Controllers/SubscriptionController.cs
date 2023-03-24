@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using testpushnotification.Models;
 using System.Text.Json.Nodes;
 using System.Security.Cryptography;
+using testpushnotification.Services;
+using testpushnotification.Data;
 
 namespace testpushnotification.Controllers;
 
@@ -11,35 +13,22 @@ namespace testpushnotification.Controllers;
 public class SubscriptionController : ControllerBase
 {
     private readonly ILogger<SubscriptionController> _logger;
-    private readonly string vapidPublicKey = "";
+    private readonly VAPIDService vapid;
+    private readonly SubscriptionDbContext subsContext;
 
-    public SubscriptionController(ILogger<SubscriptionController> logger, IConfiguration configuration)
+    public SubscriptionController(ILogger<SubscriptionController> logger, IConfiguration configuration, Services.VAPIDService vapid, testpushnotification.Data.SubscriptionDbContext subsContext)
     {
         _logger = logger;
-
-        try
-        {
-            var publicKeyPem = Convert.FromBase64String(configuration["PushServiceKeys:PublicKeyPemBase64"]);
-            System.Console.WriteLine(System.Text.Encoding.UTF8.GetString(publicKeyPem));
-            var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-            ecdsa.ImportFromPem(System.Text.Encoding.UTF8.GetString(publicKeyPem));
-            ecdsa.ImportFromPem(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(configuration["PushServiceKeys:PrivateKeyPemBase64"])));
-            
-            var ecparam = ecdsa.ExportParameters(true);
-            var uncompressed =   (new byte[]{0x04}).Concat(ecparam.Q.X).Concat(ecparam.Q.Y);
-            // uncompressed. ecparam.Q.X+ecparam.Q.Y
-            vapidPublicKey = Convert.ToBase64String(uncompressed.ToArray());
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cannot read public key or private key from configuration");
-        }
+        this.vapid = vapid;
+        this.subsContext = subsContext;
     }
 
     [HttpPost]
     [Consumes("application/json")]
-    public ActionResult Register([FromBody] JsonNode json)
+    public ActionResult Register([FromBody]PushSubscriptionInfo subscription)
     {
+        
+        
         System.Console.WriteLine(json.ToJsonString(new() { WriteIndented = true }));
         return Ok();
     }
@@ -56,7 +45,7 @@ public class SubscriptionController : ControllerBase
     [HttpGet]
     public string VAPIDPublicKey()
     {
-        return vapidPublicKey;
+        return this.vapid.VAPIDUncompressedPublicKey;
 
     }
 
