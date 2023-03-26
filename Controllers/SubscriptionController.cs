@@ -16,12 +16,19 @@ public class SubscriptionController : ControllerBase
     private readonly ILogger<SubscriptionController> _logger;
     private readonly VAPIDService vapid;
     private readonly SubscriptionDbContext subsContext;
+    private readonly IHttpClientFactory httpClientFactory;
 
-    public SubscriptionController(ILogger<SubscriptionController> logger, IConfiguration configuration, Services.VAPIDService vapid, testpushnotification.Data.SubscriptionDbContext subsContext)
+    public SubscriptionController(
+        ILogger<SubscriptionController> logger, 
+        IConfiguration configuration, 
+        Services.VAPIDService vapid, 
+        testpushnotification.Data.SubscriptionDbContext subsContext,
+        IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
         this.vapid = vapid;
         this.subsContext = subsContext;
+        this.httpClientFactory = httpClientFactory;
     }
 
     [HttpPost]
@@ -31,7 +38,7 @@ public class SubscriptionController : ControllerBase
         var subscription = await subsContext.Subscriptions.FindAsync(info.ClientId);
         if(subscription is null)
         {
-            await subsContext.Subscriptions.AddAsync(new ClientSubscription{
+            subscription = new ClientSubscription{
                 ClientId = info.ClientId,
                 Endpoint = info.Subscription.Endpoint,
                 Expires = info.Subscription.ExpirationTime,
@@ -39,7 +46,8 @@ public class SubscriptionController : ControllerBase
                 Auth = info.Subscription.Keys.Auth,
                 DateCreated = DateTimeOffset.Now,
                 DateModified = DateTimeOffset.Now
-            });
+            };
+            await subsContext.Subscriptions.AddAsync(subscription);
         }
         else
         {
@@ -50,10 +58,9 @@ public class SubscriptionController : ControllerBase
             subscription.DateModified = DateTimeOffset.Now;
         }
         await subsContext.SaveChangesAsync();
-        
-
-
         System.Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(subscription, new System.Text.Json.JsonSerializerOptions{WriteIndented = true}));
+
+        await vapid.SendPush(subscription.Endpoint, subscription.P256DH, subscription.Auth, null);
         return Ok();
     }
 
@@ -70,8 +77,19 @@ public class SubscriptionController : ControllerBase
     [HttpGet]
     public string VAPIDPublicKey()
     {
-        return this.vapid.VAPIDUncompressedPublicKey;
+        return this.vapid.ServerUncompressedPublicKey;
 
+    }
+
+    [HttpPost("{clientId}")]
+    public async Task<ActionResult> SendPushNotification([FromRoute]string clientId, [FromBody]JsonNode body)
+    {
+        var info = await subsContext.Subscriptions.FindAsync(clientId);
+        if(info is not null)
+        {
+        await vapid.SendPush(info.Endpoint, info.P256DH, info.Auth, System.Text.Encoding.UTF8.GetBytes(body["content"].ToString()));
+        }
+        return Ok();
     }
 
 }

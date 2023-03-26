@@ -7,52 +7,162 @@ namespace testpushnotification.Services;
 
 public class VAPIDService
 {
-    private readonly string vapidUncompressedPublicKey;
-    private readonly string vapidDerEncodedPublicKey;
+    private readonly byte[] serverUncompressedPublicKey;
     private readonly ECDsa ecdsa;
+    private readonly IHttpClientFactory httpClientFactory;
 
-    public string VAPIDUncompressedPublicKey => vapidUncompressedPublicKey;
-    public string VAPIDDerEncodedPublicKey => vapidDerEncodedPublicKey;
-    public VAPIDService(IConfiguration configuration)
+    public string ServerUncompressedPublicKey => Convert.ToBase64String(serverUncompressedPublicKey);
+    public string UrlBase64ServerUncompressedPublicKey => UrlBase64Encode(serverUncompressedPublicKey);
+    public string UrlBase64ServerDerEncodedPublicKey { get; }
+
+    public VAPIDService(IConfiguration configuration, IHttpClientFactory httpClientFactory)
     {
         var publicKeyPem = Convert.FromBase64String(configuration["PushServiceKeys:PublicKeyPemBase64"]);
         //System.Console.WriteLine(System.Text.Encoding.UTF8.GetString(publicKeyPem));
-        var ecdsa = ECDsa.Create();
+        ecdsa = ECDsa.Create();
         ecdsa.ImportFromPem(System.Text.Encoding.UTF8.GetString(publicKeyPem));
         ecdsa.ImportFromPem(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(configuration["PushServiceKeys:PrivateKeyPemBase64"])));
 
         var ecparam = ecdsa.ExportParameters(true);
-        var uncompressed = (new byte[] { 0x04 }).Concat(ecparam.Q.X).Concat(ecparam.Q.Y);
-        // uncompressed. ecparam.Q.X+ecparam.Q.Y
-        vapidUncompressedPublicKey = Convert.ToBase64String(uncompressed.ToArray());
-        vapidDerEncodedPublicKey = Convert.ToBase64String(ecdsa.ExportSubjectPublicKeyInfo());
+        serverUncompressedPublicKey = (new byte[] { 0x04 }).Concat(ecparam.Q.X).Concat(ecparam.Q.Y).ToArray();
+
+        UrlBase64ServerDerEncodedPublicKey = UrlBase64Encode(ecdsa.ExportSubjectPublicKeyInfo());
+        this.httpClientFactory = httpClientFactory;
     }
 
     public string GenerateAuthorizationHeader(string endpoint, DateTime? expiration = null, string? subject = null)
     {
-        if(expiration is null)
+        if (expiration is null)
         {
             expiration = DateTime.Now.AddHours(23);
         }
-        if(subject is null)
+        if (subject is null)
         {
             subject = "mailto:beeven@hotmail.com";
         }
 
-        
-        var tokenDescriptor = new SecurityTokenDescriptor{
+
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
             Audience = endpoint,
-            Subject = new System.Security.Claims.ClaimsIdentity(new[]{new System.Security.Claims.Claim("sub",subject)}),
+            Subject = new System.Security.Claims.ClaimsIdentity(new[] { new System.Security.Claims.Claim("sub", subject) }),
             Expires = expiration,
             SigningCredentials = new SigningCredentials(new ECDsaSecurityKey(ecdsa), SecurityAlgorithms.EcdsaSha256),
         };
         var tokenHandler = new JwtSecurityTokenHandler();
         var token = tokenHandler.CreateJwtSecurityToken(tokenDescriptor);
         var tokenString = tokenHandler.WriteToken(token);
-        var urlSafePublicKey = VAPIDDerEncodedPublicKey.TrimEnd('=').Replace('+','-').Replace('/','_');
-        return $"t={tokenString},k={urlSafePublicKey}";
+
+        return tokenString;
 
     }
 
+    public static string UrlBase64Encode(byte[] content)
+    {
+        return Convert.ToBase64String(content).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+    public static byte[] UrlBase64Decode(string content)
+    {
+        return Convert.FromBase64String(content.Replace("_", "/").Replace("-", "+") + new string('=', (4 - (content.Length % 4)) % 4));
+    }
+
+    public EncryptionResult Encrypt(string p256dh, string auth, byte[] content)
+    {
+
+        var serverEC = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+
+        var serverPublicParams = serverEC.ExportParameters(false);
+        var serverPublicKey = (new byte[] { 0x04 }).Concat(serverPublicParams.Q.X).Concat(serverPublicParams.Q.Y).ToArray();
+        var serverPublicKeyDer = serverEC.ExportSubjectPublicKeyInfo();
+
+        var receiverKey = UrlBase64Decode(p256dh);
+        System.Console.WriteLine(Convert.ToHexString(receiverKey));
+        var ecparam = new ECParameters();
+        ecparam.Curve = ECCurve.NamedCurves.nistP256;
+        ecparam.Q.X = receiverKey.Skip(1).Take(32).ToArray();
+        ecparam.Q.Y = receiverKey.Skip(33).ToArray();
+        var receiverEC = ECDiffieHellman.Create(ecparam);
+
+        var sharedSecret = serverEC.DeriveKeyMaterial(receiverEC.PublicKey);
+
+        var userSecret = UrlBase64Decode(auth);
+        var secret = HKDF.DeriveKey(HashAlgorithmName.SHA256, sharedSecret, 32, userSecret, "Content-Encoding: auth\x00"u8.ToArray());
+
+        var suffix = new byte[6 + 2 + receiverKey.Length + 2 + serverPublicKey.Length];
+        Buffer.BlockCopy("P-256\0"u8.ToArray(), 0, suffix, 0, 6);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(suffix[6..8], (ushort)receiverKey.Length);
+        Buffer.BlockCopy(receiverKey, 0, suffix, 8, receiverKey.Length);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(suffix[(8 + receiverKey.Length)..(10 + receiverKey.Length)], (ushort)serverPublicKey.Length);
+        Buffer.BlockCopy(serverPublicKey, 0, suffix, 10 + receiverKey.Length, serverPublicKey.Length);
+        //var suffix = "P-256\0"u8.ToArray().Concat(receiverKeyLengthBytes).Concat(receiverKey).Concat(senderKeyLengthBytes).Concat(serverPublicKey).ToArray();
+        var salt = System.Security.Cryptography.RandomNumberGenerator.GetBytes(16);
+
+        var encryptionKey = HKDF.DeriveKey(HashAlgorithmName.SHA256, secret, 16, salt, "Content-Encoding: aesgcm\0"u8.ToArray().Concat(suffix).ToArray());
+        var nonce = HKDF.DeriveKey(HashAlgorithmName.SHA256, secret, 12, salt, "Content-Encoding: nonce\0"u8.ToArray().Concat(suffix).ToArray());
+
+        var paddingLength = 0;
+        var padding = new byte[2 + paddingLength];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(padding, (ushort)paddingLength);
+
+        var plainText = padding.Concat(content).ToArray();
+        var cipher = new AesGcm(encryptionKey);
+        var tag = new byte[AesGcm.TagByteSizes.MaxSize];
+        var cipherText = new byte[plainText.Length];
+        cipher.Encrypt(nonce, plainText, cipherText, tag);
+
+        System.Console.WriteLine(Convert.ToHexString(cipherText));
+
+        return new EncryptionResult
+        {
+            Salt = salt,
+            Payload = cipherText,
+            PublicKey = serverPublicKey
+        };
+    }
+
+
+    public async Task SendPush(string endpoint, string receiverKey, string receiverSecret, byte[]? content)
+    {
+
+        var client = httpClientFactory.CreateClient();
+        var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+        if (content?.Length > 0)
+        {
+            var encryptedPayload = Encrypt(receiverKey, receiverSecret, content);
+            request.Content = new ByteArrayContent(encryptedPayload.Payload);
+            request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+            request.Content.Headers.ContentLength = encryptedPayload.Payload.Length;
+            request.Content.Headers.ContentEncoding.Add("aesgcm");
+            request.Headers.Add("Authorization", "WebPush " + GenerateAuthorizationHeader(endpoint));
+            request.Headers.Add("Crypto-Key", $"p256ecdsa={UrlBase64ServerUncompressedPublicKey};dh={encryptedPayload.Base64EncodedPublicKey}");
+            request.Headers.Add("Encryption", "keyid=p256dh;salt=" + encryptedPayload.Base64EncodedSalt);
+            
+            
+        }
+        else
+        {
+            request.Content = new ByteArrayContent(new byte[] { });
+            
+            request.Headers.Add("Authorization", "Bearer " + GenerateAuthorizationHeader(endpoint));
+            request.Headers.Add("Crypto-Key", $"p256ecdsa={UrlBase64ServerUncompressedPublicKey}");
+        }
+        request.Headers.Add("TTL", "0");
+
+
+        var resp = await client.SendAsync(request);
+        Console.WriteLine("Receive from server: {0}",await resp.Content.ReadAsStringAsync());
+
+    }
+
+
+    public class EncryptionResult
+    {
+        public byte[] Salt { get; set; }
+        public byte[] Payload { get; set; }
+        public byte[] PublicKey { get; set; }
+
+        public string Base64EncodedPublicKey => UrlBase64Encode(PublicKey);
+        public string Base64EncodedSalt => UrlBase64Encode(Salt);
+    }
 
 }

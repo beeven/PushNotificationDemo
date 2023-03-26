@@ -26,9 +26,14 @@
     </div>
     <button class="mx-2" type="submit" disabled=true id="subscriptionButton">Subscribe</button>
 </div>
-<div class="text-center">
-    <button onclick="postMessage()">Post Message</button>
+
+<div class="text-center mt-1">
+    <button onclick="postMessage()">Send message to worker</button>
 </div>
-<div class="text-center">
-    <span id="message"></span>
+<div class="text-center mt-1">
+    <span id="message" >waiting message from worker...</span>
+</div>
+
+<div class="text-center mt-2">
+    <button onclick="sendPushNotification()" >Send Push Notification</button>
 </div>

@@ -19,17 +19,17 @@ function notifyMe() {
 }
 
 function postMessage() {
-    navigator.serviceWorker.ready.then((registration)=>{
-        registration.active.postMessage({"content":"I am a message from website.", "created": new Date()})
+    navigator.serviceWorker.ready.then((registration) => {
+        registration.active.postMessage({ "content": "I am a message from website.", "created": new Date() })
     })
 }
 
 
 var subscriptionButton = document.getElementById("subscriptionButton");
 
-navigator.serviceWorker.register("service-worker.js", {scope: "/"}).then((registration)=>{
+navigator.serviceWorker.register("service-worker.js", { scope: "/" }).then((registration) => {
     let serviceWorker;
-    if(registration.installing) {
+    if (registration.installing) {
         serviceWorker = registration.installing;
         document.querySelector("#kind").textContent = "installing";
     } else if (registration.waiting) {
@@ -41,25 +41,25 @@ navigator.serviceWorker.register("service-worker.js", {scope: "/"}).then((regist
     }
     if (serviceWorker) {
         document.querySelector("#state").textContent = serviceWorker.state;
-        serviceWorker.addEventListener("statechange", (e)=>{
+        serviceWorker.addEventListener("statechange", (e) => {
             document.querySelector("#state").textContent = serviceWorker.state;
         });
     }
-}, (error)=>{
+}, (error) => {
     console.log(error);
 });
 
-navigator.serviceWorker.onmessage = (event)=>{
+navigator.serviceWorker.onmessage = (event) => {
     document.querySelector("#message").textContent = `The service worker sent me a message: ${event.data}`;
 }
 
 navigator.serviceWorker.ready
-    .then((registration)=>{
+    .then((registration) => {
         console.log("service worker registered");
         subscriptionButton.removeAttribute('disabled');
         return registration.pushManager.getSubscription();
-    }).then((subscription)=>{
-        if(subscription) {
+    }).then((subscription) => {
+        if (subscription) {
             console.log('Already subscribed', subscription.endpoint);
             console.log(subscription);
             setUnsubscribeButton();
@@ -69,7 +69,7 @@ navigator.serviceWorker.ready
     });
 
 function subscribe() {
-    navigator.serviceWorker.ready.then(async (registration)=>{
+    navigator.serviceWorker.ready.then(async (registration) => {
         const response = await fetch('/Subscription/VAPIDPublicKey');
         const vapidPublicKey = await response.text();
         // Chrome doesn't accept the base64-encoded (string) vapidPublicKey yet
@@ -79,12 +79,12 @@ function subscribe() {
             userVisibleOnly: true,
             applicationServerKey: convertedVapidKey
         });
-    }).then((subscription)=>{
+    }).then((subscription) => {
         console.log("Subscribed", subscription.endpoint);
         console.log(subscription);
         console.log(subscription.toJSON());
         let clientId = document.querySelector("#clientId").value ?? "beeven";
-        return fetch('/Subscription/Register',{
+        return fetch('/Subscription/Register', {
             method: 'post',
             headers: {
                 'Content-Type': 'application/json'
@@ -99,25 +99,25 @@ function subscribe() {
 
 function unsubscribe() {
     navigator.serviceWorker.ready
-    .then((registration)=>{
-        return registration.pushManager.getSubscription();
-    }).then((subscription)=>{
-        return subscription.unsubscribe()
-            .then(()=>{
-                console.log("Unsubscribed", subscription.endpoint);
-                let clientId = document.querySelector("#clientId").value ?? "beeven";
-                return fetch("/Subscription/Unregister",{
-                    method: 'post',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ 
-                        clientId: clientId,
-                        subscription: subscription 
-                    })
+        .then((registration) => {
+            return registration.pushManager.getSubscription();
+        }).then((subscription) => {
+            return subscription.unsubscribe()
+                .then(() => {
+                    console.log("Unsubscribed", subscription.endpoint);
+                    let clientId = document.querySelector("#clientId").value ?? "beeven";
+                    return fetch("/Subscription/Unregister", {
+                        method: 'post',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            clientId: clientId,
+                            subscription: subscription
+                        })
+                    });
                 });
-            });
-    }).then(setSubscribeButton);
+        }).then(setSubscribeButton);
 }
 
 
@@ -134,14 +134,23 @@ function setUnsubscribeButton() {
 function urlBase64ToUint8Array(base64String) {
     var padding = '='.repeat((4 - base64String.length % 4) % 4);
     var base64 = (base64String + padding)
-      .replace(/\-/g, '+')
-      .replace(/_/g, '/');
-   
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+
     var rawData = window.atob(base64);
     var outputArray = new Uint8Array(rawData.length);
-   
+
     for (var i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
+        outputArray[i] = rawData.charCodeAt(i);
     }
     return outputArray;
-  }
+}
+
+function sendPushNotification() {
+    let clientId = document.querySelector("#clientId").value ?? "beeven";
+    fetch("/Subscription/SendPushNotification/"+clientId, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({"content":"hello"})
+    })
+}
