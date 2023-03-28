@@ -14,14 +14,14 @@ namespace testpushnotification.Controllers;
 public class SubscriptionController : ControllerBase
 {
     private readonly ILogger<SubscriptionController> _logger;
-    private readonly VAPIDService vapid;
+    private readonly IVAPIDService vapid;
     private readonly SubscriptionDbContext subsContext;
     private readonly IHttpClientFactory httpClientFactory;
 
     public SubscriptionController(
         ILogger<SubscriptionController> logger, 
         IConfiguration configuration, 
-        Services.VAPIDService vapid, 
+        Services.IVAPIDService vapid, 
         testpushnotification.Data.SubscriptionDbContext subsContext,
         IHttpClientFactory httpClientFactory)
     {

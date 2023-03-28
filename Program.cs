@@ -4,7 +4,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
-builder.Services.AddScoped<testpushnotification.Services.VAPIDService>();
+builder.Services.AddScoped<testpushnotification.Services.IVAPIDService, testpushnotification.Services.VAPIDService>();
 builder.Services.AddDbContext<testpushnotification.Data.SubscriptionDbContext>(options => {
     options.UseSqlite("Data Source=subsdb.sqlite");
 });
