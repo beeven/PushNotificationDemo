@@ -24,11 +24,11 @@ public class WebPushVAPIDService: IVAPIDService
         var q = privateKeyParams.Parameters.G.Multiply(privateKeyParams.D);
         var publicKeyParams = new ECPublicKeyParameters(q, privateKeyParams.Parameters);
 
-        ServerUncompressedPublicKey = Convert.ToBase64String(privateKeyParams.D.ToByteArray()).Replace("/","_").Replace("+","-").TrimEnd('=');
+        ServerUncompressedPublicKey = Convert.ToBase64String(publicKeyParams.Q.GetEncoded(false));
 
         vapidDetails = new VapidDetails("mailto:beeven@hotmail.com", 
-            Convert.ToBase64String(publicKeyParams.Q.GetEncoded(false)).Replace("/","_").Replace("+","-").TrimEnd('='), 
-            ServerUncompressedPublicKey);
+            Convert.ToBase64String(publicKeyParams.Q.GetEncoded(false)), 
+            Convert.ToBase64String(privateKeyParams.D.ToByteArrayUnsigned()));
     
     }
 
@@ -37,7 +37,7 @@ public class WebPushVAPIDService: IVAPIDService
         var subscription = new PushSubscription(endpoint,receiverKey, receiverSecret);
         try
         {
-            await webPushClient.SendNotificationAsync(subscription, Encoding.UTF8.GetString(content),vapidDetails);
+            await webPushClient.SendNotificationAsync(subscription, Encoding.UTF8.GetString(content ?? "subscribed"u8.ToArray()),vapidDetails);
         }
         catch(WebPushException ex)
         {

@@ -77,7 +77,7 @@ public class SubscriptionController : ControllerBase
     [HttpGet]
     public string VAPIDPublicKey()
     {
-        return this.vapid.ServerUncompressedPublicKey;
+        return this.vapid.UrlBase64ServerUncompressedPublicKey;
 
     }
 

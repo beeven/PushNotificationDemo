@@ -1,9 +1,24 @@
 console.log("Reporting from service-worker!")
 
+console.log(self)
+
 self.addEventListener('push', (event)=>{
-    event.waitUntil(self.registration.showNotification('From service worker',{
-        body: 'Push Notification Subscription Management'
-    }));
+    console.log(event);
+    event.waitUntil(async function() {
+        await self.registration.showNotification("Push notification",{
+            body: "data: "+event.data?.text()
+        });
+        const allClients = await clients.matchAll({
+            includeUncontrolled: true
+        });
+        for(const client of allClients) {
+            console.log(client);
+            client.postMessage(event.data?.text());
+        }
+    }());
+    
+    // console.log(self.Clients);
+    // console.log(self.Client.postMessage(event.data));
 });
 
 self.addEventListener('pushsubscriptionchange', (event)=>{

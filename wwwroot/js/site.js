@@ -72,17 +72,21 @@ function subscribe() {
     navigator.serviceWorker.ready.then(async (registration) => {
         const response = await fetch('/Subscription/VAPIDPublicKey');
         const vapidPublicKey = await response.text();
+        
         // Chrome doesn't accept the base64-encoded (string) vapidPublicKey yet
         // urlBase64ToUint8Array() is defined in /tools.js
+        
         const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+        console.log(vapidPublicKey)
+
         return registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: convertedVapidKey
+            applicationServerKey: vapidPublicKey
         });
     }).then((subscription) => {
         console.log("Subscribed", subscription.endpoint);
         console.log(subscription);
-        console.log(subscription.toJSON());
+        //console.log(subscription.toJSON());
         let clientId = document.querySelector("#clientId").value ?? "beeven";
         return fetch('/Subscription/Register', {
             method: 'post',
@@ -94,6 +98,8 @@ function subscribe() {
                 subscription: subscription
             })
         });
+    },(err)=>{
+        console.error(err);
     }).then(setUnsubscribeButton);
 }
 

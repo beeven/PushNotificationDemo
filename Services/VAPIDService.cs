@@ -43,10 +43,12 @@ public class VAPIDService : IVAPIDService
             subject = "mailto:beeven@hotmail.com";
         }
 
+        var uri = new Uri(endpoint);
+        var audience = uri.Scheme + @"://" + uri.Host;
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {
-            Audience = endpoint,
+            Audience = audience,
             Subject = new System.Security.Claims.ClaimsIdentity(new[] { new System.Security.Claims.Claim("sub", subject) }),
             Expires = expiration,
             SigningCredentials = new SigningCredentials(new ECDsaSecurityKey(ecdsa), SecurityAlgorithms.EcdsaSha256),
@@ -111,7 +113,7 @@ public class VAPIDService : IVAPIDService
         return new IVAPIDService.EncryptionResult
         {
             Salt = salt,
-            Payload = cipherText,
+            Payload = cipherText.Concat(tag).ToArray(),
             PublicKey = serverPublicKey
         };
     }
@@ -130,14 +132,14 @@ public class VAPIDService : IVAPIDService
             request.Content.Headers.ContentLength = encryptedPayload.Payload.Length;
             request.Content.Headers.ContentEncoding.Add("aesgcm");
             request.Headers.Add("Authorization", "WebPush " + GenerateAuthorizationHeader(endpoint));
-            request.Headers.Add("Crypto-Key", $"p256ecdsa={UrlBase64ServerUncompressedPublicKey};dh={encryptedPayload.Base64EncodedPublicKey}");
-            request.Headers.Add("Encryption", "keyid=p256dh;salt=" + encryptedPayload.Base64EncodedSalt);
+            request.Headers.Add("Crypto-Key", $"dh={encryptedPayload.Base64EncodedPublicKey};p256ecdsa={UrlBase64ServerUncompressedPublicKey}");
+            request.Headers.Add("Encryption", "salt=" + encryptedPayload.Base64EncodedSalt);
         }
         else
         {
             request.Content = new ByteArrayContent(new byte[] { });
 
-            request.Headers.Add("Authorization", "Bearer " + GenerateAuthorizationHeader(endpoint));
+            request.Headers.Add("Authorization", "WebPush " + GenerateAuthorizationHeader(endpoint));
             request.Headers.Add("Crypto-Key", $"p256ecdsa={UrlBase64ServerUncompressedPublicKey}");
         }
         request.Headers.Add("TTL", "2419200");
