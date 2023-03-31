@@ -10,6 +10,7 @@ public class WebPushVAPIDService: IVAPIDService
 
     private readonly VapidDetails vapidDetails;
     private readonly WebPushClient webPushClient;
+    private readonly string serverPrivateKey;
 
     public string ServerUncompressedPublicKey {get;}
     public string UrlBase64ServerUncompressedPublicKey => ServerUncompressedPublicKey.TrimEnd('=').Replace("+","-").Replace("/","_");
@@ -25,15 +26,27 @@ public class WebPushVAPIDService: IVAPIDService
         var publicKeyParams = new ECPublicKeyParameters(q, privateKeyParams.Parameters);
 
         ServerUncompressedPublicKey = Convert.ToBase64String(publicKeyParams.Q.GetEncoded(false));
+        serverPrivateKey = Convert.ToBase64String(privateKeyParams.D.ToByteArrayUnsigned());
 
         vapidDetails = new VapidDetails("mailto:beeven@hotmail.com", 
             Convert.ToBase64String(publicKeyParams.Q.GetEncoded(false)), 
             Convert.ToBase64String(privateKeyParams.D.ToByteArrayUnsigned()));
+        
     
+    }
+
+    public string GenerateAuthorizationHeader(string endpoint, DateTime? expiration = null, string? subject = null)
+    {
+        var uri = new Uri(endpoint);
+        var audience = uri.Scheme + @"://" + uri.Host;
+        var headers = WebPush.VapidHelper.GetVapidHeaders(audience, subject, ServerUncompressedPublicKey, serverPrivateKey);
+        var jwtToken = headers["Authorization"].Split(" ")[1];
+        return jwtToken;
     }
 
     public async Task SendPush(string endpoint, string receiverKey, string receiverSecret, byte[]? content)
     {
+        
         var subscription = new PushSubscription(endpoint,receiverKey, receiverSecret);
         try
         {

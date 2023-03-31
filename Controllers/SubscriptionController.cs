@@ -19,9 +19,9 @@ public class SubscriptionController : ControllerBase
     private readonly IHttpClientFactory httpClientFactory;
 
     public SubscriptionController(
-        ILogger<SubscriptionController> logger, 
-        IConfiguration configuration, 
-        Services.IVAPIDService vapid, 
+        ILogger<SubscriptionController> logger,
+        IConfiguration configuration,
+        Services.IVAPIDService vapid,
         testpushnotification.Data.SubscriptionDbContext subsContext,
         IHttpClientFactory httpClientFactory)
     {
@@ -33,17 +33,19 @@ public class SubscriptionController : ControllerBase
 
     [HttpPost]
     [Consumes("application/json")]
-    public async Task<ActionResult> Register([FromBody]PushSubscriptionInfo info)
+    public async Task<ActionResult> Register([FromBody] PushSubscriptionInfo info)
     {
-        var subscription = await subsContext.Subscriptions.FindAsync(info.ClientId);
-        if(subscription is null)
+        var subscription = await subsContext.Subscriptions.SingleOrDefaultAsync(x => x.ClientId == info.ClientId && x.Endpoint == info.Subscription.Endpoint);
+        if (subscription is null)
         {
-            subscription = new ClientSubscription{
+            subscription = new ClientSubscription
+            {
                 ClientId = info.ClientId,
                 Endpoint = info.Subscription.Endpoint,
                 Expires = info.Subscription.ExpirationTime,
                 P256DH = info.Subscription.Keys.P256DH,
                 Auth = info.Subscription.Keys.Auth,
+                JwtToken = vapid.GenerateAuthorizationHeader(info.Subscription.Endpoint, info.Subscription.ExpirationTime),
                 DateCreated = DateTimeOffset.Now,
                 DateModified = DateTimeOffset.Now
             };
@@ -51,14 +53,19 @@ public class SubscriptionController : ControllerBase
         }
         else
         {
-            subscription.Endpoint = info.Subscription.Endpoint;
-            subscription.Expires = info.Subscription.ExpirationTime;
+            //subscription.Endpoint = info.Subscription.Endpoint;
+            //subscription.Expires = info.Subscription.ExpirationTime;
             subscription.P256DH = info.Subscription.Keys.P256DH;
             subscription.Auth = info.Subscription.Keys.Auth;
+            if(info.Subscription.ExpirationTime != subscription.Expires && subscription.Expires - DateTimeOffset.Now < TimeSpan.FromHours(1))
+            {
+                subscription.Expires = info.Subscription.ExpirationTime;
+                subscription.JwtToken = vapid.GenerateAuthorizationHeader(subscription.Endpoint, info.Subscription.ExpirationTime);
+            }
             subscription.DateModified = DateTimeOffset.Now;
         }
         await subsContext.SaveChangesAsync();
-        System.Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(subscription, new System.Text.Json.JsonSerializerOptions{WriteIndented = true}));
+        System.Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(subscription, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
         await vapid.SendPush(subscription.Endpoint, subscription.P256DH, subscription.Auth, null);
         return Ok();
@@ -69,8 +76,8 @@ public class SubscriptionController : ControllerBase
     [Consumes("application/json")]
     public async Task<ActionResult> Unregister([FromBody] PushSubscriptionInfo info)
     {
-        await subsContext.Subscriptions.Where(x => x.ClientId == info.ClientId).ExecuteDeleteAsync();
-        System.Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(info, new System.Text.Json.JsonSerializerOptions{WriteIndented = true}));
+        await subsContext.Subscriptions.Where(x => x.ClientId == info.ClientId && x.Endpoint == info.Subscription.Endpoint).ExecuteDeleteAsync();
+        System.Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(info, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         return Ok();
     }
 
@@ -82,12 +89,12 @@ public class SubscriptionController : ControllerBase
     }
 
     [HttpPost("{clientId}")]
-    public async Task<ActionResult> SendPushNotification([FromRoute]string clientId, [FromBody]JsonNode body)
+    public async Task<ActionResult> SendPushNotification([FromRoute] string clientId, [FromBody] JsonNode body)
     {
-        var info = await subsContext.Subscriptions.FindAsync(clientId);
-        if(info is not null)
+        var info = await subsContext.Subscriptions.SingleOrDefaultAsync(x => x.ClientId == clientId && x.Endpoint == body["endpoint"].ToString());
+        if (info is not null)
         {
-        await vapid.SendPush(info.Endpoint, info.P256DH, info.Auth, System.Text.Encoding.UTF8.GetBytes(body["content"].ToString()));
+            await vapid.SendPush(info.Endpoint, info.P256DH, info.Auth, System.Text.Encoding.UTF8.GetBytes(body["content"]?.ToString() ?? ""));
         }
         return Ok();
     }

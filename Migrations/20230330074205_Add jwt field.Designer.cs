@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using testpushnotification.Data;
 
@@ -10,24 +11,21 @@ using testpushnotification.Data;
 namespace testpushnotification.Migrations
 {
     [DbContext(typeof(SubscriptionDbContext))]
-    partial class SubscriptionDbContextModelSnapshot : ModelSnapshot
+    [Migration("20230330074205_Add jwt field")]
+    partial class Addjwtfield
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.0-preview.2.23128.3");
 
             modelBuilder.Entity("testpushnotification.Data.ClientSubscription", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Auth")
-                        .IsRequired()
+                    b.Property<string>("ClientId")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ClientId")
+                    b.Property<string>("Auth")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -52,9 +50,7 @@ namespace testpushnotification.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClientId", "Endpoint");
+                    b.HasKey("ClientId");
 
                     b.ToTable("Subscriptions");
                 });

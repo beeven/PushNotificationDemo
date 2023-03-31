@@ -26,6 +26,7 @@ function postMessage() {
 
 
 var subscriptionButton = document.getElementById("subscriptionButton");
+var subscriptionEndpoint = "";
 
 navigator.serviceWorker.register("service-worker.js", { scope: "/" }).then((registration) => {
     let serviceWorker;
@@ -53,7 +54,26 @@ navigator.serviceWorker.onmessage = (event) => {
     document.querySelector("#message").textContent = `The service worker sent me a message: ${event.data}`;
 }
 
-navigator.serviceWorker.ready
+// navigator.serviceWorker.ready
+//     .then((registration) => {
+//         console.log("service worker registered");
+//         subscriptionButton.removeAttribute('disabled');
+//         return registration.pushManager.getSubscription();
+//     }).then((subscription) => {
+//         if (subscription) {
+//             console.log('Already subscribed', subscription.endpoint);
+//             console.log(subscription);
+//             subscriptionEndpoint = subscription.endpoint;
+//             setUnsubscribeButton();
+//         } else {
+//             onsole.log("Not yet subscribed");
+//             setSubscribeButton();
+//         }
+//     });
+
+function checkSubscription() {
+    console.log("on subscription button click");
+    navigator.serviceWorker.ready
     .then((registration) => {
         console.log("service worker registered");
         subscriptionButton.removeAttribute('disabled');
@@ -62,11 +82,16 @@ navigator.serviceWorker.ready
         if (subscription) {
             console.log('Already subscribed', subscription.endpoint);
             console.log(subscription);
+            subscriptionEndpoint = subscription.endpoint;
             setUnsubscribeButton();
         } else {
+            console.log("Not yet subscribed");
             setSubscribeButton();
         }
+    }).catch((err)=>{
+        console.log(err);
     });
+}
 
 function subscribe() {
     navigator.serviceWorker.ready.then(async (registration) => {
@@ -81,11 +106,12 @@ function subscribe() {
 
         return registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: vapidPublicKey
+            applicationServerKey: convertedVapidKey
         });
     }).then((subscription) => {
         console.log("Subscribed", subscription.endpoint);
         console.log(subscription);
+        subscriptionEndpoint = subscription.endpoint;
         //console.log(subscription.toJSON());
         let clientId = document.querySelector("#clientId").value ?? "beeven";
         return fetch('/Subscription/Register', {
@@ -130,6 +156,7 @@ function unsubscribe() {
 function setSubscribeButton() {
     subscriptionButton.onclick = subscribe;
     subscriptionButton.textContent = 'Subscribe';
+    subscriptionEndpoint = "";
 }
 
 function setUnsubscribeButton() {
@@ -157,6 +184,9 @@ function sendPushNotification() {
     fetch("/Subscription/SendPushNotification/"+clientId, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({"content":"hello"})
+        body: JSON.stringify({
+            "content": "hello",
+            "endpoint": subscriptionEndpoint
+        })
     })
 }
